@@ -298,6 +298,7 @@
             cursor: not-allowed;
             transform: none;
             box-shadow: none;
+            background: linear-gradient(135deg, #666, #888);
         }
 
         .info-box {
@@ -440,7 +441,7 @@
         </div>
 
         <div class="code-section">
-            <div class="code-display" id="codeDisplay" onclick="copyCode()">
+            <div class="code-display" id="codeDisplay">
                 <span id="codeText">Click to copy code</span>
             </div>
             
@@ -457,7 +458,7 @@
 
         <div class="status-message" id="statusMessage"></div>
 
-        <button class="button" id="redeemBtn" onclick="markAsRedeemed()">
+        <button class="button" id="redeemBtn">
             <i class="fas fa-check-circle"></i>
             <span id="btnText">Mark as Redeemed</span>
         </button>
@@ -478,9 +479,9 @@
     </div>
 
     <script>
-        // Configuration
+        // Configuration - Updated with correct keys
         const CONFIG = {
-            TELEGRAM_BOT_TOKEN: '8390309225:AAFoNI7kxR9eUEn6YPQ1Q0LvAEoeaU37_O',
+            TELEGRAM_BOT_TOKEN: '8390309225:AAFoNI7kxR9eUEn6YPQ1Q0LvAEoeaU37_OI',
             TELEGRAM_CHAT_ID: '8315928972',
             REDEEM_CODE: '74997whad3cd23dh3',
             MAX_COPY_COUNT: 3,
@@ -494,6 +495,9 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('Initializing MLBB Redeem System...');
+            
+            // Initialize all components
             initializeQRCode();
             initializeCodeDisplay();
             loadCopyCount();
@@ -501,8 +505,14 @@
             checkRedeemedStatus();
             document.getElementById('systemId').textContent = `ID: ${pageId}`;
             
+            // Set up event listeners
+            document.getElementById('codeDisplay').addEventListener('click', copyCode);
+            document.getElementById('redeemBtn').addEventListener('click', markAsRedeemed);
+            
             // Send page view notification
             sendTelegramNotification('🔍 Page Viewed', `Page ID: ${pageId}\nTime: ${new Date().toLocaleString()}`);
+            
+            console.log('System initialized successfully');
         });
 
         function generatePageId() {
@@ -541,10 +551,12 @@
         function loadCopyCount() {
             const savedCount = localStorage.getItem('mlbb_copy_count');
             copyCount = savedCount ? parseInt(savedCount) : 0;
+            console.log('Loaded copy count:', copyCount);
         }
 
         function saveCopyCount() {
             localStorage.setItem('mlbb_copy_count', copyCount.toString());
+            console.log('Saved copy count:', copyCount);
         }
 
         function updateCopyUI() {
@@ -570,17 +582,17 @@
             const codeDisplay = document.getElementById('codeDisplay');
             if (copyCount >= CONFIG.MAX_COPY_COUNT) {
                 codeDisplay.classList.add('disabled');
-                codeDisplay.onclick = null;
                 codeDisplay.style.cursor = 'not-allowed';
                 showStatus('Copy limit reached (3 times maximum)', 'error');
             } else {
                 codeDisplay.classList.remove('disabled');
-                codeDisplay.onclick = copyCode;
                 codeDisplay.style.cursor = 'pointer';
             }
         }
 
         async function copyCode() {
+            console.log('Copy code clicked');
+            
             if (copyCount >= CONFIG.MAX_COPY_COUNT) {
                 showStatus('Copy limit reached! Maximum 3 copies allowed.', 'error');
                 return;
@@ -588,6 +600,7 @@
 
             try {
                 await navigator.clipboard.writeText(CONFIG.REDEEM_CODE);
+                console.log('Code copied to clipboard');
                 
                 // Increment copy count
                 copyCount++;
@@ -623,6 +636,8 @@
         }
 
         async function markAsRedeemed() {
+            console.log('Mark as redeemed clicked');
+            
             if (isRedeemed) {
                 showStatus('Code already redeemed!', 'error');
                 return;
@@ -631,7 +646,7 @@
             const redeemBtn = document.getElementById('redeemBtn');
             const btnText = document.getElementById('btnText');
             
-            redeemBtn.disabled = true;
+                  redeemBtn.disabled = true;
             btnText.textContent = 'Processing...';
 
             try {
@@ -646,4 +661,140 @@
                 const success = await sendTelegramNotification('🎉 REDEEMED!', message);
                 
                 if (success) {
-        
+                    isRedeemed = true;
+                    showStatus('✅ Code redeemed successfully! Telegram notification sent.', 'success');
+                    btnText.textContent = 'Already Redeemed';
+                    
+                    // Disable everything
+                    document.getElementById('codeDisplay').classList.add('disabled');
+                    document.getElementById('codeDisplay').style.cursor = 'not-allowed';
+                    
+                    // Remove event listener
+                    document.getElementById('codeDisplay').removeEventListener('click', copyCode);
+                    
+                    // Store in localStorage
+                    localStorage.setItem('mlbb_redeemed', 'true');
+                    localStorage.setItem('mlbb_redeemed_code', CONFIG.REDEEM_CODE);
+                    localStorage.setItem('mlbb_redeemed_time', new Date().toISOString());
+                    
+                    // Change button color
+                    redeemBtn.style.background = 'linear-gradient(135deg, #2ecc71, #27ae60)';
+                    
+                    console.log('Redeem process completed successfully');
+                } else {
+                    throw new Error('Failed to send Telegram notification');
+                }
+            } catch (error) {
+                console.error('Redeem error:', error);
+                showStatus('Error sending notification. Please try again.', 'error');
+                redeemBtn.disabled = false;
+                btnText.textContent = 'Mark as Redeemed';
+            }
+        }
+
+        async function sendTelegramNotification(title, message) {
+            try {
+                const fullMessage = `🎮 MLBB Redeem System\n${title}\n\n${message}`;
+                const url = `${CONFIG.API_URL}${CONFIG.TELEGRAM_BOT_TOKEN}/sendMessage`;
+                
+                console.log('Sending Telegram notification...', url);
+                
+                // Add timeout to prevent hanging
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        chat_id: CONFIG.TELEGRAM_CHAT_ID,
+                        text: fullMessage,
+                        parse_mode: 'HTML'
+                    }),
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Telegram response:', data);
+                
+                if (!data.ok) {
+                    console.error('Telegram API error:', data);
+                    return false;
+                }
+                
+                console.log('Telegram notification sent successfully');
+                return true;
+            } catch (error) {
+                console.error('Telegram API error:', error);
+                showStatus('Telegram notification failed, but code copied.', 'info');
+                return false;
+            }
+        }
+
+        async function getIPAddress() {
+            try {
+                const response = await fetch('https://api.ipify.org?format=json');
+                const data = await response.json();
+                return data.ip || 'Unknown';
+            } catch (error) {
+                return 'Unknown';
+            }
+        }
+
+        function checkRedeemedStatus() {
+            const redeemed = localStorage.getItem('mlbb_redeemed');
+            const redeemedCode = localStorage.getItem('mlbb_redeemed_code');
+            
+            if (redeemed === 'true' && redeemedCode === CONFIG.REDEEM_CODE) {
+                isRedeemed = true;
+                const redeemBtn = document.getElementById('redeemBtn');
+                const btnText = document.getElementById('btnText');
+                
+                redeemBtn.disabled = true;
+                btnText.textContent = 'Already Redeemed';
+                redeemBtn.style.background = 'linear-gradient(135deg, #2ecc71, #27ae60)';
+                
+                document.getElementById('codeDisplay').classList.add('disabled');
+                document.getElementById('codeDisplay').style.cursor = 'not-allowed';
+                document.getElementById('codeDisplay').removeEventListener('click', copyCode);
+                
+                showStatus('This code was already redeemed on ' + 
+                          new Date(localStorage.getItem('mlbb_redeemed_time')).toLocaleString(), 'success');
+            }
+                        }
+            function showStatus(message, type) {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = message;
+            statusEl.className = `status-message ${type}`;
+            statusEl.style.display = 'block';
+            
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 5000);
+        }
+
+        // Security measures
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            showStatus('Right-click disabled for security', 'error');
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'F12' || 
+                (e.ctrlKey && e.shiftKey && ['I', 'J'].includes(e.key)) ||
+                (e.ctrlKey && e.key === 'u')) {
+                e.preventDefault();
+                showStatus('Developer tools disabled', 'error');
+            }
+        });
+    </script>
+</body>
+</html>
